@@ -32,6 +32,12 @@ make measure
 | active parts | 7 | 5 | 4 |
 | duplicate rows | 0 | 0 | 0 |
 
+The two arms above are one run, and [`docs/measurements.md`](docs/measurements.md) is where the numbers
+come from: `make measure` regenerates them. Arm A's loss moves between runs - 9766 rows here, 9016 in
+the next - and that is the finding rather than a caveat: one INSERT per event loses about half of what
+the API acknowledged, and how much depends on how the writes happen to land. Arm B is 0 lost in every
+run so far.
+
 Same server, same table, same events, same POST size. The only difference is how many INSERT statements
 the ingest path issues: 20.000 single-row inserts lose about half of them, while the same events batched
 into inserts of 5.000 rows lose none and leave four parts behind for ten times the volume.
