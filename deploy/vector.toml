@@ -1,0 +1,101 @@
+# Tail the ingest API's WAL and write into a table we own.
+#
+# Read this next to docs/postmortem.md: the version of this pipeline that ran in production used
+# `parse_json!`, and the `!` is the whole story - one malformed line panicked the transform and the
+# event was dropped with nothing but an ERROR line in a container log to show for it.
+[sources.wal]
+type = "file"
+include = ["/wal/events-*.ndjson"]
+read_from = "beginning"
+ignore_checkpoints = false
+# A single writer owns these files, so nothing else may truncate them out from under Vector.
+ignore_older_secs = 0
+
+[transforms.parse]
+inputs = ["wal"]
+type = "remap"
+source = '''
+# parse_json returns the value and the error separately, so a bad line is a branch, not a panic. The
+# production pipeline this is based on used parse_json! - and the `!` is the whole difference between
+# "this line is in a table" and "this line is gone".
+msg, err = parse_json(.message)
+if err == null {
+    # merge is fallible even when both sides are objects, so the error is captured rather than
+    # assumed away. This is the same decision as parse_json above, taken one level down.
+    merged, merge_err = merge(., msg)
+    if merge_err == null {
+        . = merged
+        .malformed = false
+    } else {
+        .malformed = true
+        .reason = "payload_is_not_an_object"
+        .raw = .message
+    }
+} else {
+    .malformed = true
+    .reason = "parse_json_failed"
+    .raw = .message
+}
+.'''
+
+[transforms.shape]
+inputs = ["parse"]
+type = "remap"
+source = '''
+if .malformed == false {
+    # Missing fields get the column default; the ingest API has already refused to write an event
+    # that was missing the required set, so this is a second line of defence, not the only one.
+    .seq = to_int(.seq) ?? 0
+    .value = to_float(.value) ?? 0.0
+}
+.'''
+
+[transforms.only_events]
+inputs = ["shape"]
+type = "filter"
+condition = '.malformed == false'
+
+[transforms.only_dlq]
+inputs = ["shape"]
+type = "filter"
+condition = '.malformed == true'
+
+[sinks.clickhouse]
+type = "clickhouse"
+inputs = ["only_events"]
+endpoint = "http://clickhouse:8123"
+database = "lab"
+table = "events"
+auth.strategy = "basic"
+auth.user = "lab"
+auth.password = "lab"
+compression = "gzip"
+# Vector attaches its own metadata (file, host, source_type, timestamp) to every event. The table is
+# ours and does not have those columns, so they are dropped on the way in rather than papered over
+# with a column nobody asked for.
+skip_unknown_fields = true
+# 5000 rows is the number ClickHouse's own documentation gives: "inserting data in packets of at
+# least 5000 rows, or no more than a single request per second".
+batch.max_events = 5000
+batch.timeout_secs = 2
+batch.max_bytes = 10485760
+buffer.type = "disk"
+buffer.max_size = 1073741824
+buffer.when_full = "block"
+request.retry_attempts = 10
+
+[sinks.dlq]
+type = "clickhouse"
+inputs = ["only_dlq"]
+endpoint = "http://clickhouse:8123"
+database = "lab"
+table = "events_dlq"
+auth.strategy = "basic"
+auth.user = "lab"
+auth.password = "lab"
+compression = "gzip"
+skip_unknown_fields = true
+# Only the malformed lines arrive here. This is what separates "we parse what we can" from "we lose
+# what we cannot" - the difference between the two is a table you can count.
+batch.max_events = 1000
+batch.timeout_secs = 5

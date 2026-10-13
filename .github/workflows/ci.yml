@@ -1,0 +1,20 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      # Everything that can run without a server runs here. The measurements need a ClickHouse and a
+      # Vector, so they stay a local `make measure` - a CI job that cannot reproduce them would only be
+      # a green tick that means nothing.
+      - run: go vet ./...
+      - run: go test ./... -count=1
+      - run: go build ./...

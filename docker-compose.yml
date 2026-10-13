@@ -1,0 +1,41 @@
+# ClickHouse 25.5 on purpose: it is the version the production pipeline this is based on ran, so the
+# numbers here are about the same engine that produced the question.
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.5
+    container_name: lab-clickhouse
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    environment:
+      CLICKHOUSE_DB: lab
+      CLICKHOUSE_SKIP_USER_SETUP: "1"
+    ulimits:
+      nofile: { soft: 262144, hard: 262144 }
+    volumes:
+      - ./deploy/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ch-data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  vector:
+    image: timberio/vector:latest-alpine
+    container_name: lab-vector
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    command: ["--config", "/etc/vector/vector.toml"]
+    volumes:
+      - ./deploy/vector.toml:/etc/vector/vector.toml:ro
+      # The ingest API writes the WAL on the host; Vector reads the same directory. That handoff on
+      # disk is the only thing keeping the two apart, which is why one can be restarted without the
+      # other losing an event.
+      - ./data/wal:/wal
+      - vector-data:/var/lib/vector
+
+volumes:
+  ch-data:
+  vector-data:
