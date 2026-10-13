@@ -45,6 +45,23 @@ Quantile-level timings on the batched path, measured on the same run ([`docs/mea
 | funnel session_start → level_complete → iap_purchase, 24h window | 1 | 12 ms |
 | revenue from purchases | 1 | 2 ms |
 
+## The shape of it
+
+An event leaves the phone through a validation edge that answers before it is durable, lands in a
+write-ahead log, and reaches exactly one table. Everything else is a read path over that table:
+
+![Architecture: a phone event is validated, acknowledged, written to a write-ahead log, shipped by Vector into one ClickHouse table, and read by three audiences - the game team through a per-version quality view, trust and safety through a per-user projection, and product through materialized rollups.](docs/figures/event-pipeline.png)
+
+**Figure 1**. One event stream, three audiences. The write path is the part this repository measures;
+the three read paths below it are the reason it is one system instead of three.
+
+The measurement that motivates the whole thing, from the same run as the table above:
+
+![Two bar charts: of 20,000 acknowledged events, 48.8 percent reached the table with one INSERT per event and 100 percent with batched inserts; the single-row writer also left 7 active parts behind against 4 for the batched path at ten times the volume.](docs/figures/write-path-measured.png)
+
+**Figure 2**. Acknowledged is not stored. The API answered `202` for 20,000 events in both arms; only
+the writer changed.
+
 ## Run it
 
 ```sh

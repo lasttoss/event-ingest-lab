@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<!-- diagram-meta {"topic":"event-pipeline","level":"container","type":"architecture","question":"How does one event go from a phone to three different audiences?","sources":["cmd/api/*.go","internal/ingest/*.go","internal/wal/*.go","internal/store/*.go","deploy/vector.toml","deploy/schema.sql"],"updated":"2026-10-13"} -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>One event stream, three audiences</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --paper: #f5f5f5; --ink: #2d3142; --muted: #4f5d75; --soft: #7a8399;
+      --rule: rgba(45,49,66,0.12); --accent: #eb6c36; --link: #2e5aa8;
+      --sans: 'Geist', system-ui, sans-serif; --serif: 'Instrument Serif', serif; --mono: 'Geist Mono', ui-monospace, monospace;
+    }
+    body { font-family: var(--sans); background: var(--paper); color: var(--ink);
+           min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 3rem 2rem; }
+    .frame { max-width: 1120px; width: 100%; }
+    .eyebrow { font-family: var(--mono); font-size: 0.66rem; font-weight: 500; letter-spacing: 0.18em;
+               text-transform: uppercase; color: var(--muted); margin-bottom: 0.5rem; }
+    h1 { font-family: var(--serif); font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem); font-weight: 400;
+         letter-spacing: -0.02em; line-height: 1.15; margin-bottom: 1.5rem; }
+    .scroller { overflow-x: auto; }
+    svg { width: 100%; min-width: 1000px; display: block; }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Architecture · one system</p>
+    <h1>One event stream, three audiences</h1>
+    <div class="scroller">
+    <svg viewBox="0 0 1000 600" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="event-pipeline-title event-pipeline-desc">
+      <title id="event-pipeline-title">One event stream, three audiences</title>
+      <desc id="event-pipeline-desc">A phone event is validated, written to a write-ahead log, forwarded by Vector, and stored once in ClickHouse, from where three read paths serve the game team, trust and safety, and product reporting.</desc>
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+        <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+      </defs>
+      <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+      <!-- Zone: write path (the measured part) -->
+      <rect x="24" y="40" width="952" height="132" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <rect x="40" y="44" width="104" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="92" y="53" fill="rgba(45,49,66,0.42)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">WRITE PATH</text>
+
+      <!-- Arrows -->
+      <line x1="212" y1="106" x2="256" y2="106" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+      <line x1="456" y1="106" x2="500" y2="106" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <line x1="644" y1="106" x2="688" y2="106" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <path d="M 858,138 V 196" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <rect x="866" y="158" width="118" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="870" y="168" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">insert 5000 rows</text>
+      <rect x="218" y="86" width="34" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="222" y="96" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', monospace">gzip</text>
+      <rect x="462" y="86" width="34" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="466" y="96" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">202?</text>
+      <rect x="654" y="86" width="26" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="658" y="96" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">tail</text>
+
+      <!-- Node: client -->
+      <rect x="42" y="74" width="170" height="64" rx="6" fill="#f5f5f5"/>
+      <rect x="42" y="74" width="170" height="64" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <rect x="50" y="82" width="34" height="12" rx="2" fill="transparent" stroke="rgba(79,93,117,0.50)" stroke-width="0.8"/>
+      <text x="67" y="91" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SDK</text>
+      <text x="67" y="117" fill="#2d3142" font-size="12" font-weight="600">Game client</text>
+      <text x="50" y="131" fill="#4f5d75" font-size="8.5" font-family="'Geist Mono', monospace">queue · cap · drop oldest</text>
+
+      <!-- Node: ingest api -->
+      <rect x="258" y="74" width="198" height="64" rx="6" fill="#f5f5f5"/>
+      <rect x="258" y="74" width="198" height="64" rx="6" fill="rgba(45,49,66,0.05)" stroke="#2d3142" stroke-width="1"/>
+      <rect x="266" y="82" width="52" height="12" rx="2" fill="transparent" stroke="rgba(79,93,117,0.50)" stroke-width="0.8"/>
+      <text x="292" y="91" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">INGEST API</text>
+      <text x="292" y="117" fill="#2d3142" font-size="12" font-weight="600">Validate, then answer</text>
+      <text x="266" y="131" fill="#4f5d75" font-size="8.5" font-family="'Geist Mono', monospace">reasons · 202/503 · :8099</text>
+
+      <!-- Node: wal -->
+      <rect x="502" y="74" width="142" height="64" rx="6" fill="#f5f5f5"/>
+      <rect x="502" y="74" width="142" height="64" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <rect x="510" y="82" width="30" height="12" rx="2" fill="transparent" stroke="rgba(79,93,117,0.50)" stroke-width="0.8"/>
+      <text x="525" y="91" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">WAL</text>
+      <text x="510" y="117" fill="#2d3142" font-size="12" font-weight="600">Durable log</text>
+      <text x="510" y="131" fill="#4f5d75" font-size="8.5" font-family="'Geist Mono', monospace">events-*.ndjson</text>
+
+      <!-- Node: vector -->
+      <rect x="690" y="74" width="170" height="64" rx="6" fill="#f5f5f5"/>
+      <rect x="690" y="74" width="170" height="64" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <rect x="698" y="82" width="44" height="12" rx="2" fill="transparent" stroke="rgba(79,93,117,0.50)" stroke-width="0.8"/>
+      <text x="720" y="91" fill="#4f5d75" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">VECTOR</text>
+      <text x="698" y="117" fill="#2d3142" font-size="12" font-weight="600">Ship and batch</text>
+      <text x="698" y="131" fill="#4f5d75" font-size="8.5" font-family="'Geist Mono', monospace">parse · no bang · 2s</text>
+
+      <!-- Zone: storage -->
+      <rect x="24" y="188" width="952" height="118" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <rect x="40" y="192" width="96" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="88" y="201" fill="rgba(45,49,66,0.42)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">ONE COPY</text>
+
+      <!-- DLQ arrow -->
+      <line x1="700" y1="262" x2="656" y2="262" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+      <rect x="660" y="242" width="42" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="664" y="252" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">rejected</text>
+
+      <!-- Node: events (focal) -->
+      <rect x="320" y="216" width="300" height="72" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1.4"/>
+      <text x="470" y="245" fill="#2d3142" font-size="13" font-weight="600" text-anchor="middle">lab.events</text>
+      <text x="470" y="262" fill="#4f5d75" font-size="8.5" font-family="'Geist Mono', monospace" text-anchor="middle">dedup by event_id · partitioned by ingest day</text>
+      <text x="470" y="277" fill="#4f5d75" font-size="8.5" font-family="'Geist Mono', monospace" text-anchor="middle">ORDER BY (game_id, event, event_time, event_id)</text>
+
+      <!-- Node: dlq -->
+      <rect x="700" y="222" width="230" height="60" rx="6" fill="#f5f5f5"/>
+      <rect x="700" y="222" width="230" height="60" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <text x="815" y="248" fill="#2d3142" font-size="12" font-weight="600" text-anchor="middle">lab.events_dlq</text>
+      <text x="815" y="264" fill="#4f5d75" font-size="8.5" font-family="'Geist Mono', monospace" text-anchor="middle">lines that could not be parsed</text>
+      <text x="815" y="276" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">counted, never silently dropped</text>
+
+      <!-- Arrows from lab.events down to the three readers -->
+      <path d="M 400,288 V 356" fill="none" stroke="#4f5d75" stroke-width="1.1" marker-end="url(#arrow)"/>
+      <path d="M 470,288 V 356" fill="none" stroke="#4f5d75" stroke-width="1.1" marker-end="url(#arrow)"/>
+      <path d="M 545,288 V 356" fill="none" stroke="#4f5d75" stroke-width="1.1" marker-end="url(#arrow)"/>
+      <path d="M 320,252 H 200 Q 168,252 168,284 V 420 Q 168,436 200,436 H 232" fill="none" stroke="#4f5d75" stroke-width="1.1" marker-end="url(#arrow)"/>
+      <rect x="252" y="398" width="88" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="256" y="408" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">quality view</text>
+      <rect x="404" y="330" width="66" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="408" y="340" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">projection</text>
+      <rect x="500" y="330" width="70" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="504" y="340" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace">rollup · MV</text>
+
+      <!-- Zone: readers -->
+      <rect x="24" y="346" width="952" height="122" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <rect x="40" y="350" width="150" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="115" y="359" fill="rgba(45,49,66,0.42)" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.14em">THREE READ PATHS</text>
+
+      <rect x="234" y="368" width="196" height="86" rx="6" fill="#f5f5f5"/>
+      <rect x="234" y="368" width="196" height="86" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <text x="332" y="392" fill="#2d3142" font-size="12" font-weight="600" text-anchor="middle">The game team</text>
+      <text x="332" y="410" fill="#4f5d75" font-size="9" text-anchor="middle">is this build sending the</text>
+      <text x="332" y="424" fill="#4f5d75" font-size="9" text-anchor="middle">parameters it should?</text>
+      <text x="332" y="442" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">per day · per app_version</text>
+
+      <rect x="446" y="368" width="196" height="86" rx="6" fill="#f5f5f5"/>
+      <rect x="446" y="368" width="196" height="86" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <text x="544" y="392" fill="#2d3142" font-size="12" font-weight="600" text-anchor="middle">Trust and safety</text>
+      <text x="544" y="410" fill="#4f5d75" font-size="9" text-anchor="middle">what did this player do,</text>
+      <text x="544" y="424" fill="#4f5d75" font-size="9" text-anchor="middle">in order, and does it fit?</text>
+      <text x="544" y="442" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">one user · ordered by time</text>
+
+      <rect x="658" y="368" width="196" height="86" rx="6" fill="#f5f5f5"/>
+      <rect x="658" y="368" width="196" height="86" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <text x="756" y="392" fill="#2d3142" font-size="12" font-weight="600" text-anchor="middle">Product</text>
+      <text x="756" y="410" fill="#4f5d75" font-size="9" text-anchor="middle">how many players, how</text>
+      <text x="756" y="424" fill="#4f5d75" font-size="9" text-anchor="middle">much revenue, per day?</text>
+      <text x="756" y="442" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">rollups · reconciled</text>
+
+      <!-- Legend strip -->
+      <line x1="40" y1="492" x2="960" y2="492" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <text x="40" y="508" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+      <rect x="40" y="524" width="14" height="10" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+      <text x="60" y="532" fill="#4f5d75" font-size="8.5">The one table every reader queries</text>
+      <rect x="268" y="524" width="14" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <text x="288" y="532" fill="#4f5d75" font-size="8.5">Component</text>
+      <line x1="384" y1="529" x2="412" y2="529" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+      <text x="420" y="532" fill="#4f5d75" font-size="8.5">From a phone</text>
+      <line x1="520" y1="529" x2="548" y2="529" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <text x="556" y="532" fill="#4f5d75" font-size="8.5">Internal step</text>
+      <line x1="652" y1="529" x2="680" y2="529" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+      <text x="688" y="532" fill="#4f5d75" font-size="8.5">Rejected line</text>
+
+      <text x="40" y="568" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace">source: cmd/api · internal/ingest · internal/wal · internal/store · deploy/vector.toml · deploy/schema.sql</text>
+    </svg>
+    </div>
+  </div>
+</body>
+</html>

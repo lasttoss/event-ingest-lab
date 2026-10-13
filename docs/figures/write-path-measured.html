@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<!-- diagram-meta {"topic":"write-path-measured","level":"runtime","type":"bar","question":"With the same events, what does one INSERT per event cost compared with batched inserts?","sources":["cmd/lab/*.go","internal/harness/*.go","internal/store/*.go","docs/measurements.md"],"updated":"2026-10-13"} -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>What the writer costs: 20,000 events, two ways</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --paper: #f5f5f5; --ink: #2d3142; --muted: #4f5d75; --soft: #7a8399;
+      --accent: #eb6c36; --rule: rgba(45,49,66,0.12);
+      --sans: 'Geist', system-ui, sans-serif; --serif: 'Instrument Serif', serif; --mono: 'Geist Mono', ui-monospace, monospace;
+    }
+    body { font-family: var(--sans); background: var(--paper); color: var(--ink);
+           min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 3rem 2rem; }
+    .frame { max-width: 1120px; width: 100%; }
+    .eyebrow { font-family: var(--mono); font-size: 0.66rem; font-weight: 500; letter-spacing: 0.18em;
+               text-transform: uppercase; color: var(--muted); margin-bottom: 0.5rem; }
+    h1 { font-family: var(--serif); font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem); font-weight: 400;
+         letter-spacing: -0.02em; line-height: 1.15; margin-bottom: 1.5rem; }
+    .scroller { overflow-x: auto; }
+    svg { width: 100%; min-width: 1000px; display: block; }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Measurement · make measure</p>
+    <h1>What the writer costs</h1>
+    <div class="scroller">
+    <svg viewBox="0 0 1000 660" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="write-path-measured-title write-path-measured-desc">
+      <title id="write-path-measured-title">What the writer costs: 20,000 events, two ways</title>
+      <desc id="write-path-measured-desc">Of 20,000 events accepted by the API, 48.8 percent reached the table when each event was its own INSERT and 100 percent reached it when the same events were batched into inserts of 5,000 rows; the single-row writer also left more active parts behind.</desc>
+      <defs>
+        <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">
+          <circle cx="1" cy="1" r="0.9" fill="rgba(45,49,66,0.08)"/>
+        </pattern>
+      </defs>
+      <rect width="100%" height="100%" fill="#f5f5f5"/>
+      <rect width="100%" height="100%" fill="url(#dots)" opacity="0.5"/>
+
+      <!-- Panel 1: the measure everything else is read against -->
+      <text x="40" y="52" fill="#2d3142" font-size="12" font-weight="600">Share of acknowledged events that reached the table</text>
+      <text x="40" y="68" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace">same server · same table · same 20,000 events · same POST size · axis starts at zero</text>
+
+      <line x1="270" y1="104" x2="270" y2="252" stroke="#bfc0c0" stroke-width="0.8"/>
+      <line x1="345" y1="104" x2="345" y2="252" stroke="rgba(45,49,66,0.06)" stroke-width="0.8"/>
+      <line x1="420" y1="104" x2="420" y2="252" stroke="rgba(45,49,66,0.06)" stroke-width="0.8"/>
+      <line x1="495" y1="104" x2="495" y2="252" stroke="rgba(45,49,66,0.06)" stroke-width="0.8"/>
+      <text x="270" y="266" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">0</text>
+      <text x="345" y="266" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">25%</text>
+      <text x="420" y="266" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">50%</text>
+      <text x="495" y="266" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">75%</text>
+      <text x="570" y="266" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">100%</text>
+
+      <text x="40" y="126" fill="#2d3142" font-size="11" font-weight="600">One INSERT per event</text>
+      <text x="40" y="140" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace">20,000 requests</text>
+      <rect x="270" y="112" width="146" height="26" fill="#eb6c36"/>
+      <text x="426" y="130" fill="#eb6c36" font-size="10" font-weight="600" font-family="'Geist Mono', monospace">48.8%</text>
+      <text x="474" y="130" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace">9,766 rows</text>
+
+      <text x="40" y="200" fill="#2d3142" font-size="11" font-weight="600">Batched inserts</text>
+      <text x="40" y="214" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace">5,000 rows per INSERT</text>
+      <rect x="270" y="186" width="300" height="26" fill="#4f5d75"/>
+      <text x="578" y="204" fill="#2d3142" font-size="10" font-weight="600" font-family="'Geist Mono', monospace">100%</text>
+      <text x="626" y="204" fill="#2d3142" font-size="9" font-family="'Geist Mono', monospace">20,000 rows</text>
+
+      <!-- The finding, in its own band: no label shares space with a bar -->
+      <line x1="40" y1="292" x2="960" y2="292" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <rect x="40" y="308" width="3" height="54" fill="#eb6c36"/>
+      <text x="56" y="322" fill="#2d3142" font-size="11" font-weight="600">10,234 events acknowledged, then never written</text>
+      <text x="56" y="338" fill="#4f5d75" font-size="9.5">The API answered 202 for all 20,000 and logged nothing wrong. The loss is only visible</text>
+      <text x="56" y="352" fill="#4f5d75" font-size="9.5">by counting the table, which is what this harness does.</text>
+
+      <rect x="520" y="308" width="3" height="54" fill="#4f5d75"/>
+      <text x="536" y="322" fill="#2d3142" font-size="11" font-weight="600">0 events lost, at 10x the volume too</text>
+      <text x="536" y="338" fill="#4f5d75" font-size="9.5">The same batched path with 200,000 events: 200,000 rows, 4 parts,</text>
+      <text x="536" y="352" fill="#4f5d75" font-size="9.5">0 duplicates. The limit belonged to the writer, not the database.</text>
+
+      <!-- Panel 2 -->
+      <text x="40" y="404" fill="#2d3142" font-size="12" font-weight="600">Active parts left behind after the run settled</text>
+      <text x="40" y="420" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace">every INSERT makes at least one part, before the merge catches up · 30 px per part</text>
+
+      <line x1="270" y1="442" x2="270" y2="554" stroke="#bfc0c0" stroke-width="0.8"/>
+      <line x1="330" y1="442" x2="330" y2="554" stroke="rgba(45,49,66,0.06)" stroke-width="0.8"/>
+      <line x1="390" y1="442" x2="390" y2="554" stroke="rgba(45,49,66,0.06)" stroke-width="0.8"/>
+      <line x1="450" y1="442" x2="450" y2="554" stroke="rgba(45,49,66,0.06)" stroke-width="0.8"/>
+      <line x1="510" y1="442" x2="510" y2="554" stroke="rgba(45,49,66,0.06)" stroke-width="0.8"/>
+      <text x="270" y="568" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">0</text>
+      <text x="330" y="568" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">2</text>
+      <text x="390" y="568" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">4</text>
+      <text x="450" y="568" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">6</text>
+      <text x="510" y="568" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">8</text>
+
+      <text x="40" y="464" fill="#2d3142" font-size="11" font-weight="600">One INSERT per event</text>
+      <text x="40" y="478" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace">20,000 events</text>
+      <rect x="270" y="450" width="210" height="24" fill="#eb6c36"/>
+      <text x="488" y="467" fill="#eb6c36" font-size="10" font-weight="600" font-family="'Geist Mono', monospace">7</text>
+
+      <text x="40" y="506" fill="#2d3142" font-size="11" font-weight="600">Batched inserts</text>
+      <text x="40" y="520" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace">20,000 events</text>
+      <rect x="270" y="492" width="150" height="24" fill="#4f5d75"/>
+      <text x="428" y="509" fill="#2d3142" font-size="10" font-weight="600" font-family="'Geist Mono', monospace">5</text>
+
+      <text x="40" y="548" fill="#2d3142" font-size="11" font-weight="600">Batched inserts</text>
+      <text x="40" y="562" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace">200,000 events</text>
+      <rect x="270" y="534" width="120" height="24" fill="#9aa3b5"/>
+      <text x="398" y="551" fill="#2d3142" font-size="10" font-weight="600" font-family="'Geist Mono', monospace">4</text>
+
+      <line x1="40" y1="594" x2="960" y2="594" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <text x="40" y="610" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+      <rect x="112" y="602" width="14" height="10" rx="2" fill="#eb6c36"/>
+      <text x="132" y="610" fill="#4f5d75" font-size="8.5">One INSERT per event - the writer that lost data</text>
+      <rect x="420" y="602" width="14" height="10" rx="2" fill="#4f5d75"/>
+      <text x="440" y="610" fill="#4f5d75" font-size="8.5">WAL, Vector, batched at 5,000 rows</text>
+      <rect x="662" y="602" width="14" height="10" rx="2" fill="#9aa3b5"/>
+      <text x="682" y="610" fill="#4f5d75" font-size="8.5">The same batched path, 10x volume</text>
+      <text x="40" y="640" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace">source: make measure · docs/measurements.md - counts read back from ClickHouse after the runs settled</text>
+    </svg>
+
+    </div>
+  </div>
+</body>
+</html>
