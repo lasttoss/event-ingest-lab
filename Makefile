@@ -12,6 +12,10 @@ fmt:
 
 up: ## start ClickHouse and Vector (the ingest API runs on the host, so it can be restarted mid-experiment)
 	@mkdir -p data/wal
+	@# Vector bind-mounts this directory. Docker creates a bind-mounted directory it has to create
+	@# itself as root, and then the ingest API - which runs on the host, as you - cannot write the
+	@# write-ahead log into it. Give it back to the user who is about to write to it.
+	@[ -w data/wal ] || docker run --rm -v "$(PWD)/data":/d alpine chown -R "$$(id -u):$$(id -g)" /d
 	@docker compose up -d --wait
 
 down:

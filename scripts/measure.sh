@@ -10,6 +10,9 @@ cd "$(dirname "$0")/.."
 EVENTS="${EVENTS:-20000}"
 SCALE_EVENTS="${SCALE_EVENTS:-200000}"
 OUT=docs/measurements.md
+# One run, one document. Every block below appends, so the file has to be emptied once here:
+# without it a second `make measure` added a whole second copy of the report to the first one.
+: > "${OUT}"
 API_PORT=8099
 
 # The health check is not "something answers" - it is "the API I started is the one answering, and it
