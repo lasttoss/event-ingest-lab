@@ -1,5 +1,7 @@
 # event-ingest-lab
 
+[![ci](https://github.com/lasttoss/event-ingest-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/lasttoss/event-ingest-lab/actions/workflows/ci.yml)
+
 One event-log system, three audiences. A casual game needs the same stream of player events to answer
 three different questions, and it should not need three pipelines to do it:
 
